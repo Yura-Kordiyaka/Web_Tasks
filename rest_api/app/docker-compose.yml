@@ -1,0 +1,112 @@
+version: '3.8'
+
+services:
+
+  backend:
+    container_name: backend
+    restart: always
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile
+    env_file:
+      - .env
+    volumes:
+      - .:/django_test
+    command: >
+      sh -c "python manage.py test && python manage.py migrate --noinput && gunicorn app.wsgi:application --bind 0.0.0.0:8000 --reload --log-level=info"
+    ports:
+      - '8000:8000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis-cache:
+    image: redis:alpine
+    hostname: redis-cache
+    container_name: redis-cache
+    restart: on-failure
+    ports:
+      - '6379:6379'
+    command: redis-server
+    volumes:
+      - cache:/data
+
+
+  celery-worker:
+    container_name: celery-worker
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    command: celery -A app.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+    volumes:
+      - .:/django_test
+    depends_on:
+      - redis-cache
+
+
+  celery-beat:
+    container_name: celery-beat
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    command: celery -A app.celery_app  beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_PORT=${REDIS_PORT}
+    volumes:
+      - .:/django_test
+    depends_on:
+      - redis-cache
+
+
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  flower:
+    container_name: flower
+    build:
+      context: .
+      dockerfile: ./docker/app/Dockerfile
+    command: celery -A app.celery_app flower beat --loglevel=info
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL}
+    volumes:
+      - .:/toread
+    ports:
+      - "5555:5555"
+    depends_on:
+      - backend
+      - redis-cache
+      - celery-worker
+
+volumes:
+  cache:
+  model_data:
+
+networks:
+  default:
+    driver: bridge
