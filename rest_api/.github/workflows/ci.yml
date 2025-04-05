@@ -1,0 +1,27 @@
+name: Code Quality Check
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.12
+      - name: Install dependencies
+        run: |
+          pip install -r app/requirements.txt
+      - name: Run Flake8
+        run: flake8 app/ --exit-zero
