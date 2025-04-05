@@ -1,8 +1,4 @@
-# Demo
 
-<a href="http://djminapi.herokuapp.com"> Backend api</a>
-
-<a href="http://djmin.netlify.com"> Main application</a>
 
 
 # Overview
